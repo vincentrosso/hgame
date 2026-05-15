@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PhonemePlayer } from '../engine/PhonemePlayer';
 import { SoundEngine } from '../engine/SoundEngine';
-import { CONSONANTS, VOWELS, CHAR_LABELS, ALL_LABELS } from '../engine/koreanChars';
+import { CONSONANTS, VOWELS, CHAR_LABELS, ALL_LABELS, LABEL_TO_CHAR } from '../engine/koreanChars';
 
 type DrillPhase = 'LEVEL_SELECT' | 'COUNTDOWN' | 'QUESTION' | 'FEEDBACK' | 'RESULTS';
 
@@ -453,10 +453,15 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             }
           }
 
+          const handleHover = level.soundMode
+            ? () => { const c = LABEL_TO_CHAR[choice]; if (c) phoneme.current.play(c); }
+            : undefined;
+
           return (
             <button
               key={choice}
               onClick={() => handleSelect(choice)}
+              onMouseEnter={handleHover}
               style={{
                 height: `${btnH}px`,
                 fontSize: `${btnFont}px`,

@@ -18,3 +18,9 @@ export const CHAR_LABELS: Record<string, string> = {
 
 // unique IPA labels for use as distractor pool (ㅚ and ㅞ share [ weː ])
 export const ALL_LABELS = [...new Set(Object.values(CHAR_LABELS))];
+
+// reverse map: IPA label → first matching Korean char (for playing sound on hover)
+export const LABEL_TO_CHAR: Record<string, string> = {};
+for (const [char, label] of Object.entries(CHAR_LABELS)) {
+  if (!(label in LABEL_TO_CHAR)) LABEL_TO_CHAR[label] = char;
+}
