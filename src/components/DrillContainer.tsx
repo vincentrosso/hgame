@@ -3,24 +3,37 @@ import { PhonemePlayer } from '../engine/PhonemePlayer';
 import { SoundEngine } from '../engine/SoundEngine';
 import { CONSONANTS, VOWELS } from '../engine/koreanChars';
 
-type DrillPhase = 'COUNTDOWN' | 'QUESTION' | 'FEEDBACK' | 'RESULTS';
+type DrillPhase = 'LEVEL_SELECT' | 'COUNTDOWN' | 'QUESTION' | 'FEEDBACK' | 'RESULTS';
 
 interface Question {
   target: string;
   choices: string[];
 }
 
-const SESSION_SECONDS = 60;
+interface LevelConfig {
+  choices: number;
+  sessionSeconds: number;
+  questionSeconds: number | null;
+  label: string;
+  desc: string;
+}
+
+const LEVELS: LevelConfig[] = [
+  { choices: 4, sessionSeconds: 90, questionSeconds: null, label: 'LEVEL 1', desc: '4 choices · 90s session' },
+  { choices: 6, sessionSeconds: 90, questionSeconds: 6,    label: 'LEVEL 2', desc: '6 choices · 6s per question' },
+  { choices: 8, sessionSeconds: 90, questionSeconds: 4,    label: 'LEVEL 3', desc: '8 choices · 4s per question' },
+];
+
 const FEEDBACK_MS = 700;
 const POOL_EXPAND_AT = 10;
 
-function makeQuestion(pool: string[], exclude?: string): Question {
+function makeQuestion(pool: string[], numChoices: number, exclude?: string): Question {
   const candidates = exclude ? pool.filter(c => c !== exclude) : pool;
   const target = candidates[Math.floor(Math.random() * candidates.length)];
   const others = pool.filter(c => c !== target);
   const distractors: string[] = [];
   const used = new Set<string>([target]);
-  while (distractors.length < Math.min(3, others.length)) {
+  while (distractors.length < Math.min(numChoices - 1, others.length)) {
     const pick = others[Math.floor(Math.random() * others.length)];
     if (!used.has(pick)) { used.add(pick); distractors.push(pick); }
   }
@@ -28,7 +41,8 @@ function makeQuestion(pool: string[], exclude?: string): Question {
 }
 
 const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
-  const [phase, setPhase] = useState<DrillPhase>('COUNTDOWN');
+  const [phase, setPhase] = useState<DrillPhase>('LEVEL_SELECT');
+  const [levelIdx, setLevelIdx] = useState(0);
   const [countdown, setCountdown] = useState(3);
   const [question, setQuestion] = useState<Question | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -36,13 +50,17 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [correct, setCorrect] = useState(0);
   const [total, setTotal] = useState(0);
   const [streak, setStreak] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(SESSION_SECONDS);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
+  const [questionTimeLeft, setQuestionTimeLeft] = useState<number | null>(null);
 
   const phoneme = useRef(new PhonemePlayer());
   const lastTargetRef = useRef<string | undefined>(undefined);
   const correctRef = useRef(0);
-  const timeLeftRef = useRef(SESSION_SECONDS);
+  const timeLeftRef = useRef(0);
+  const questionTimeLeftRef = useRef<number | null>(null);
+
+  const level = LEVELS[levelIdx];
 
   const getPool = () =>
     correctRef.current >= POOL_EXPAND_AT ? [...CONSONANTS, ...VOWELS] : VOWELS;
@@ -51,18 +69,19 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const poolLabel = correct >= POOL_EXPAND_AT ? 'ALL' : 'VOWELS';
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
 
-  // Keep timeLeftRef in sync so FEEDBACK timeout can read it without stale closure
   useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
+  useEffect(() => { questionTimeLeftRef.current = questionTimeLeft; }, [questionTimeLeft]);
 
   // Countdown phase
   useEffect(() => {
     if (phase !== 'COUNTDOWN') return;
     if (countdown <= 0) {
-      const q = makeQuestion(getPool());
+      const q = makeQuestion(getPool(), level.choices);
       lastTargetRef.current = q.target;
       setQuestion(q);
       setPhase('QUESTION');
       setTimerRunning(true);
+      if (level.questionSeconds !== null) setQuestionTimeLeft(level.questionSeconds);
       setTimeout(() => phoneme.current.play(q.target), 80);
       return;
     }
@@ -70,14 +89,14 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     return () => clearTimeout(t);
   }, [phase, countdown]);
 
-  // Session timer — only re-registers when timerRunning flips
+  // Session timer
   useEffect(() => {
     if (!timerRunning) return;
     const t = setInterval(() => setTimeLeft(s => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
   }, [timerRunning]);
 
-  // Time's up
+  // Session time's up
   useEffect(() => {
     if (timeLeft === 0 && timerRunning) {
       setTimerRunning(false);
@@ -85,16 +104,39 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     }
   }, [timeLeft, timerRunning]);
 
+  // Per-question timer (levels 2 & 3)
+  useEffect(() => {
+    if (phase !== 'QUESTION' || level.questionSeconds === null) return;
+    const t = setInterval(() => {
+      setQuestionTimeLeft(s => {
+        if (s === null || s <= 1) return 0;
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [phase, level.questionSeconds]);
+
+  // Per-question expiry → auto-wrong
+  useEffect(() => {
+    if (phase !== 'QUESTION' || questionTimeLeft !== 0 || level.questionSeconds === null) return;
+    setSelected(null);
+    setTotal(t => t + 1);
+    setStreak(0);
+    SoundEngine.getInstance().playJam();
+    setPhase('FEEDBACK');
+  }, [questionTimeLeft, phase, level.questionSeconds]);
+
   // Feedback → next question
   useEffect(() => {
     if (phase !== 'FEEDBACK') return;
     const t = setTimeout(() => {
       if (timeLeftRef.current > 0) {
-        const q = makeQuestion(getPool(), lastTargetRef.current);
+        const q = makeQuestion(getPool(), level.choices, lastTargetRef.current);
         lastTargetRef.current = q.target;
         setQuestion(q);
         setSelected(null);
         setPhase('QUESTION');
+        if (level.questionSeconds !== null) setQuestionTimeLeft(level.questionSeconds);
         setTimeout(() => phoneme.current.play(q.target), 80);
       } else {
         setPhase('RESULTS');
@@ -128,10 +170,11 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const handleReplay = () => question && phoneme.current.play(question.target);
 
-  const handleRestart = () => {
+  const startLevel = (idx: number) => {
     correctRef.current = 0;
-    timeLeftRef.current = SESSION_SECONDS;
+    timeLeftRef.current = LEVELS[idx].sessionSeconds;
     lastTargetRef.current = undefined;
+    setLevelIdx(idx);
     setPhase('COUNTDOWN');
     setCountdown(3);
     setQuestion(null);
@@ -140,9 +183,20 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setCorrect(0);
     setTotal(0);
     setStreak(0);
-    setTimeLeft(SESSION_SECONDS);
+    setTimeLeft(LEVELS[idx].sessionSeconds);
+    setQuestionTimeLeft(null);
     setTimerRunning(false);
   };
+
+  const handleRestart = () => startLevel(levelIdx);
+
+  const gridCols = level.choices === 4 ? '1fr 1fr'
+    : level.choices === 6 ? '1fr 1fr 1fr'
+    : '1fr 1fr 1fr 1fr';
+
+  const btnH = level.choices === 4 ? 130 : level.choices === 6 ? 110 : 90;
+  const btnFont = level.choices === 4 ? 68 : level.choices === 6 ? 56 : 48;
+  const gridW = level.choices === 4 ? 320 : level.choices === 6 ? 440 : 480;
 
   // ── Styles ──────────────────────────────────────────────────────────────
 
@@ -154,6 +208,39 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     alignItems: 'center', justifyContent: 'center',
     position: 'relative', userSelect: 'none',
   };
+
+  // ── Level select screen ──────────────────────────────────────────────────
+
+  if (phase === 'LEVEL_SELECT') {
+    return (
+      <div style={root}>
+        <h1 style={{ color: '#0ff', fontSize: '28px', letterSpacing: '6px', marginBottom: '40px' }}>
+          DRILL MODE
+        </h1>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '320px' }}>
+          {LEVELS.map((l, i) => (
+            <button key={i} onClick={() => startLevel(i)} style={{
+              padding: '18px 24px',
+              background: 'rgba(0,255,255,0.05)',
+              border: '2px solid #0ff',
+              color: '#0ff',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontFamily: '"Courier New", monospace',
+              textAlign: 'left',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}>
+              <span style={{ fontSize: '18px', letterSpacing: '2px', fontWeight: 'bold' }}>{l.label}</span>
+              <span style={{ fontSize: '13px', color: '#aaa', letterSpacing: '1px' }}>{l.desc}</span>
+            </button>
+          ))}
+        </div>
+        <button onClick={onBack} style={{ ...btnStyle('#444'), marginTop: '32px' }}>BACK</button>
+      </div>
+    );
+  }
 
   // ── Countdown screen ─────────────────────────────────────────────────────
 
@@ -172,6 +259,9 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   if (phase === 'RESULTS') {
     return (
       <div style={root}>
+        <div style={{ color: '#444', fontSize: '13px', letterSpacing: '3px', marginBottom: '8px' }}>
+          {level.label}
+        </div>
         <h1 style={{ color: '#0ff', fontSize: '36px', letterSpacing: '4px', marginBottom: '10px' }}>
           SESSION OVER
         </h1>
@@ -183,6 +273,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </p>
         <div style={{ marginTop: '48px', display: 'flex', gap: '20px' }}>
           <button onClick={handleRestart} style={btnStyle('#0ff')}>AGAIN</button>
+          <button onClick={() => setPhase('LEVEL_SELECT')} style={btnStyle('#f0f')}>LEVELS</button>
           <button onClick={onBack} style={btnStyle('#666')}>BACK</button>
         </div>
       </div>
@@ -219,6 +310,18 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       )}
 
+      {/* Per-question timer (levels 2 & 3) */}
+      {level.questionSeconds !== null && questionTimeLeft !== null && (
+        <div style={{
+          position: 'absolute', top: 62, right: 30,
+          color: questionTimeLeft <= 2 ? '#f00' : '#888',
+          fontSize: '16px', letterSpacing: '1px',
+          textShadow: questionTimeLeft <= 2 ? '0 0 8px #f00' : 'none',
+        }}>
+          {questionTimeLeft}s
+        </div>
+      )}
+
       {/* Replay button */}
       <button onClick={handleReplay} style={{
         marginBottom: '36px',
@@ -236,8 +339,13 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         ▶ PLAY
       </button>
 
-      {/* 2×2 choice grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', width: '320px' }}>
+      {/* Choice grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: gridCols,
+        gap: '16px',
+        width: `${gridW}px`,
+      }}>
         {question?.choices.map(char => {
           let border = '2px solid #222';
           let bg = 'rgba(255,255,255,0.03)';
@@ -260,8 +368,8 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
               key={char}
               onClick={() => handleSelect(char)}
               style={{
-                height: '130px',
-                fontSize: '68px',
+                height: `${btnH}px`,
+                fontSize: `${btnFont}px`,
                 background: bg,
                 border,
                 color,
