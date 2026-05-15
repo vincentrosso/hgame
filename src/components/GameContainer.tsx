@@ -349,46 +349,60 @@ const GameContainer: React.FC<{ onDrill: () => void }> = ({ onDrill }) => {
       
       {state === GameState.START && (
         <div style={overlayStyle}>
-          <h1 style={titleStyle}>GAELLAREUGEU</h1>
-          <p style={{ ...pStyle, fontSize: '14px', color: '#0ff', opacity: 0.8, marginTop: '-20px', marginBottom: '30px' }}>v0.1.8</p>
-          <p style={pStyle}>Listen to the sound. Shoot the matching character.</p>
-          <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
-            <button onClick={handleStart} style={buttonStyle}>SHOOT</button>
-            <button onClick={onDrill} style={{ ...buttonStyle, borderColor: '#f0f', color: '#f0f', boxShadow: '0 0 15px rgba(255,0,255,0.4)' }}>DRILL</button>
+          <div style={panelStyle}>
+            <h1 style={titleStyle}>GAELLAREUGEU</h1>
+            <p style={{ fontSize: '11px', color: '#0ff', letterSpacing: '3px', opacity: 0.5, marginTop: '-14px', marginBottom: '28px' }}>v0.1.9</p>
+            <p style={{ ...pStyle, color: '#555', fontSize: '14px' }}>Listen to the sound. Shoot the matching character.</p>
+            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginBottom: '20px' }}>
+              <button onClick={handleStart} style={buttonStyle}>SHOOT</button>
+              <button onClick={onDrill} style={{ ...buttonStyle, borderColor: '#f0f', color: '#f0f', boxShadow: '0 0 20px rgba(255,0,255,0.25)' }}>DRILL</button>
+            </div>
+            <p style={{ fontSize: '11px', color: '#333', letterSpacing: '3px' }}>SPACE · ENTER TO START</p>
           </div>
-          <p style={{ ...pStyle, fontSize: '14px', marginTop: '10px', opacity: 0.7 }}>PRESS SPACE OR ENTER TO SHOOT</p>
         </div>
       )}
 
       {state === GameState.BRIEFING && (
         <div style={overlayStyle}>
-          <h2 style={{ color: '#fbbf24', fontSize: '24px' }}>MISSION BRIEFING</h2>
-          <p style={pStyle}>Target Phoneme:</p>
-          <h1 style={{ fontSize: '80px', margin: '20px 0', color: '#fff' }}>{waveManagerRef.current?.targetCharacter}</h1>
-          <p style={{ ...pStyle, color: '#0ff' }}>READY IN {briefingTimer}...</p>
+          <div style={{ ...panelStyle, borderColor: 'rgba(251,191,36,0.15)' }}>
+            <p style={{ fontSize: '10px', letterSpacing: '5px', color: '#555', marginBottom: '16px' }}>TARGET PHONEME</p>
+            <div style={{ fontSize: '100px', lineHeight: 1, color: '#fff', fontFamily: '"Inter", "Apple SD Gothic Neo", sans-serif', marginBottom: '16px' }}>
+              {waveManagerRef.current?.targetCharacter}
+            </div>
+            <p style={{ fontSize: '11px', letterSpacing: '4px', color: '#fbbf24', marginTop: '8px' }}>
+              READY IN {briefingTimer}
+            </p>
+          </div>
         </div>
       )}
 
       {state === GameState.WAVE_CLEAR && (
         <div style={overlayStyle}>
-          <h1 style={{ color: '#4ade80' }}>WAVE CLEAR</h1>
-          <p style={pStyle}>Target identified and neutralized.</p>
-          <p style={{ color: '#fbbf24' }}>+500 BONUS</p>
+          <div style={{ ...panelStyle, borderColor: 'rgba(74,222,128,0.2)' }}>
+            <p style={{ fontSize: '11px', letterSpacing: '5px', color: '#4ade80', marginBottom: '10px' }}>WAVE CLEAR</p>
+            <p style={{ fontSize: '28px', color: '#fff', letterSpacing: '2px', margin: '0 0 12px' }}>WAVE {wave - 1}</p>
+            <p style={{ fontSize: '13px', color: '#fbbf24', letterSpacing: '2px' }}>+500 PTS</p>
+          </div>
         </div>
       )}
 
       {state === GameState.GAME_OVER && (
         <div style={overlayStyle}>
-          <h1 style={{ color: '#f00', fontSize: '60px' }}>MISSION FAILED</h1>
-          <p style={pStyle}>FINAL SCORE: {score}</p>
-          <button onClick={handleRestart} style={{ ...buttonStyle, borderColor: '#f00', color: '#f00', boxShadow: '0 0 15px rgba(255, 0, 0, 0.5)' }}>RETRY</button>
+          <div style={{ ...panelStyle, borderColor: 'rgba(248,113,113,0.2)' }}>
+            <p style={{ fontSize: '11px', letterSpacing: '5px', color: '#f87171', marginBottom: '16px' }}>MISSION FAILED</p>
+            <p style={{ fontSize: '64px', color: '#fbbf24', lineHeight: 1, marginBottom: '6px', textShadow: '0 0 20px rgba(251,191,36,0.4)' }}>{score}</p>
+            <p style={{ fontSize: '11px', letterSpacing: '4px', color: '#444', marginBottom: '32px' }}>FINAL SCORE</p>
+            <button onClick={handleRestart} style={{ ...buttonStyle, borderColor: 'rgba(248,113,113,0.6)', color: '#f87171', boxShadow: 'none' }}>RETRY</button>
+          </div>
         </div>
       )}
 
       {state === GameState.PAUSED && (
         <div style={overlayStyle}>
-          <h1 style={{ color: '#0ff', fontSize: '48px', letterSpacing: '8px', textShadow: '0 0 20px #0ff' }}>PAUSED</h1>
-          <p style={{ ...pStyle, fontSize: '14px', color: '#666', marginTop: '-10px' }}>P TO RESUME · Q/ESC TO QUIT</p>
+          <div style={panelStyle}>
+            <p style={{ fontSize: '32px', color: '#0ff', letterSpacing: '10px', textShadow: '0 0 20px rgba(0,255,255,0.4)', margin: '0 0 12px' }}>PAUSED</p>
+            <p style={{ fontSize: '11px', color: '#333', letterSpacing: '3px' }}>P TO RESUME · Q/ESC TO QUIT</p>
+          </div>
         </div>
       )}
 
@@ -396,21 +410,18 @@ const GameContainer: React.FC<{ onDrill: () => void }> = ({ onDrill }) => {
         <button
           onClick={handleListenAgain}
           style={{
-            position: 'absolute',
-            bottom: '20px',
-            right: '20px',
-            padding: '10px 20px',
-            background: 'rgba(0, 255, 255, 0.2)',
-            border: '2px solid #0ff',
-            color: '#0ff',
-            borderRadius: '5px',
-            cursor: 'pointer',
-            fontFamily: '"Courier New", Courier, monospace',
-            fontWeight: 'bold',
-            pointerEvents: 'auto'
+            position: 'absolute', bottom: '24px', right: '24px',
+            padding: '8px 18px',
+            background: 'rgba(0,255,255,0.05)',
+            border: '1px solid rgba(0,255,255,0.2)',
+            color: 'rgba(0,255,255,0.6)',
+            borderRadius: '6px', cursor: 'pointer',
+            fontFamily: '"Courier New", monospace',
+            fontSize: '12px', letterSpacing: '2px',
+            pointerEvents: 'auto',
           }}
         >
-          LISTEN AGAIN (L)
+          ▶ LISTEN (L)
         </button>
       )}
     </div>
@@ -419,39 +430,49 @@ const GameContainer: React.FC<{ onDrill: () => void }> = ({ onDrill }) => {
 
 const overlayStyle: React.CSSProperties = {
   position: 'absolute',
-  top: '50%',
-  left: '50%',
+  top: '50%', left: '50%',
   transform: 'translate(-50%, -50%)',
   textAlign: 'center',
   color: '#fff',
   fontFamily: '"Courier New", Courier, monospace',
   width: '100%',
-  pointerEvents: 'none'
+  pointerEvents: 'none',
+};
+
+const panelStyle: React.CSSProperties = {
+  display: 'inline-block',
+  background: 'rgba(0,0,0,0.88)',
+  border: '1px solid rgba(255,255,255,0.06)',
+  borderRadius: '14px',
+  padding: '44px 60px',
 };
 
 const titleStyle: React.CSSProperties = {
-  fontSize: '60px',
+  fontSize: '52px',
   color: '#0ff',
-  textShadow: '0 0 20px #0ff',
-  marginBottom: '20px'
+  textShadow: '0 0 30px rgba(0,255,255,0.5)',
+  letterSpacing: '4px',
+  marginBottom: '8px',
 };
 
 const pStyle: React.CSSProperties = {
-  fontSize: '18px',
-  marginBottom: '30px'
+  fontSize: '16px',
+  marginBottom: '24px',
+  color: '#888',
 };
 
 const buttonStyle: React.CSSProperties = {
-  padding: '15px 40px',
-  fontSize: '24px',
+  padding: '14px 36px',
+  fontSize: '18px',
   background: 'transparent',
-  border: '3px solid #0ff',
+  border: '1px solid rgba(0,255,255,0.5)',
   color: '#0ff',
+  borderRadius: '8px',
   cursor: 'pointer',
-  fontWeight: 'bold',
-  textShadow: '0 0 10px #0ff',
-  boxShadow: '0 0 15px rgba(0, 255, 255, 0.5)',
-  pointerEvents: 'auto'
+  fontFamily: '"Courier New", monospace',
+  letterSpacing: '3px',
+  boxShadow: '0 0 20px rgba(0,255,255,0.15)',
+  pointerEvents: 'auto',
 };
 
 export default GameContainer;
