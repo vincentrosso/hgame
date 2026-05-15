@@ -219,14 +219,14 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const handleRestart = () => startLevel(levelIdx);
 
-  const soundGridCols = '1fr 1fr 1fr';
+  const soundGridCols = '1fr 1fr';
   const listenGridCols = level.choices === 4 ? '1fr 1fr'
     : level.choices === 6 ? '1fr 1fr 1fr'
     : '1fr 1fr 1fr 1fr';
   const gridCols  = level.soundMode ? soundGridCols : listenGridCols;
-  const gridW     = level.soundMode ? 420 : level.choices === 4 ? 320 : level.choices === 6 ? 440 : 480;
-  const btnH      = level.soundMode ? 70  : level.choices === 4 ? 130 : level.choices === 6 ? 110 : 90;
-  const btnFont   = level.soundMode ? 18  : level.choices === 4 ? 68  : level.choices === 6 ? 56  : 48;
+  const gridW     = level.soundMode ? 340 : level.choices === 4 ? 320 : level.choices === 6 ? 440 : 480;
+  const btnH      = level.soundMode ? 54  : level.choices === 4 ? 130 : level.choices === 6 ? 110 : 90;
+  const btnFont   = level.soundMode ? 16  : level.choices === 4 ? 68  : level.choices === 6 ? 56  : 48;
   const btnFamily = level.soundMode ? '"Courier New", monospace' : '"Inter", "Apple SD Gothic Neo", sans-serif';
 
   const root: React.CSSProperties = {
