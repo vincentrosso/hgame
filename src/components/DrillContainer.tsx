@@ -62,6 +62,15 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const level = LEVELS[levelIdx];
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'q' || e.key === 'Q') { onBack(); return; }
+      if (e.key === 'Escape') { setPhase('LEVEL_SELECT'); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onBack]);
+
   const getPool = () =>
     correctRef.current >= POOL_EXPAND_AT ? [...CONSONANTS, ...VOWELS] : VOWELS;
 
