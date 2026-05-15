@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PhonemePlayer } from '../engine/PhonemePlayer';
 import { SoundEngine } from '../engine/SoundEngine';
-import { CONSONANTS, VOWELS } from '../engine/koreanChars';
+import { CONSONANTS, VOWELS, CHAR_LABELS } from '../engine/koreanChars';
 
 type DrillPhase = 'LEVEL_SELECT' | 'COUNTDOWN' | 'QUESTION' | 'FEEDBACK' | 'RESULTS';
 
 interface Question {
-  target: string;
-  choices: string[];
+  target: string;   // char displayed (sound mode) or spoken (listen mode)
+  choices: string[]; // buttons shown
+  answer: string;   // correct choice (= target in listen mode, romanization in sound mode)
 }
 
 interface LevelConfig {
@@ -16,18 +17,23 @@ interface LevelConfig {
   questionSeconds: number | null;
   label: string;
   desc: string;
+  soundMode: boolean;
+  accent: string;
 }
 
 const LEVELS: LevelConfig[] = [
-  { choices: 4, sessionSeconds: 90, questionSeconds: null, label: 'LEVEL 1', desc: '4 choices · 90s session' },
-  { choices: 6, sessionSeconds: 90, questionSeconds: 6,    label: 'LEVEL 2', desc: '6 choices · 6s per question' },
-  { choices: 8, sessionSeconds: 90, questionSeconds: 4,    label: 'LEVEL 3', desc: '8 choices · 4s per question' },
+  { choices: 4, sessionSeconds: 90, questionSeconds: null, label: 'LEVEL 1', desc: '4 choices · 90s session',      soundMode: false, accent: '#0ff' },
+  { choices: 6, sessionSeconds: 90, questionSeconds: 6,    label: 'LEVEL 2', desc: '6 choices · 6s per question',  soundMode: false, accent: '#0ff' },
+  { choices: 8, sessionSeconds: 90, questionSeconds: 4,    label: 'LEVEL 3', desc: '8 choices · 4s per question',  soundMode: false, accent: '#0ff' },
+  { choices: 6, sessionSeconds: 90, questionSeconds: null, label: 'SOUND',   desc: 'see char · pick romanization', soundMode: true,  accent: '#f0f' },
 ];
 
 const FEEDBACK_MS = 700;
 const POOL_EXPAND_AT = 10;
 
-function makeQuestion(pool: string[], numChoices: number, exclude?: string): Question {
+const ALL_LABELS = Object.values(CHAR_LABELS);
+
+function makeListenQuestion(pool: string[], numChoices: number, exclude?: string): Question {
   const candidates = exclude ? pool.filter(c => c !== exclude) : pool;
   const target = candidates[Math.floor(Math.random() * candidates.length)];
   const others = pool.filter(c => c !== target);
@@ -37,7 +43,27 @@ function makeQuestion(pool: string[], numChoices: number, exclude?: string): Que
     const pick = others[Math.floor(Math.random() * others.length)];
     if (!used.has(pick)) { used.add(pick); distractors.push(pick); }
   }
-  return { target, choices: [target, ...distractors].sort(() => Math.random() - 0.5) };
+  return { target, choices: [target, ...distractors].sort(() => Math.random() - 0.5), answer: target };
+}
+
+function makeSoundQuestion(pool: string[], exclude?: string): Question {
+  const candidates = exclude ? pool.filter(c => c !== exclude) : pool;
+  const target = candidates[Math.floor(Math.random() * candidates.length)];
+  const answer = CHAR_LABELS[target];
+  const otherLabels = ALL_LABELS.filter(l => l !== answer);
+  const distractors: string[] = [];
+  const used = new Set<string>([answer]);
+  while (distractors.length < Math.min(5, otherLabels.length)) {
+    const pick = otherLabels[Math.floor(Math.random() * otherLabels.length)];
+    if (!used.has(pick)) { used.add(pick); distractors.push(pick); }
+  }
+  return { target, choices: [answer, ...distractors].sort(() => Math.random() - 0.5), answer };
+}
+
+function nextQuestion(pool: string[], level: LevelConfig, exclude?: string): Question {
+  return level.soundMode
+    ? makeSoundQuestion(pool, exclude)
+    : makeListenQuestion(pool, level.choices, exclude);
 }
 
 const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
@@ -59,7 +85,6 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const lastTargetRef = useRef<string | undefined>(undefined);
   const correctRef = useRef(0);
   const timeLeftRef = useRef(0);
-  const questionTimeLeftRef = useRef<number | null>(null);
 
   const level = LEVELS[levelIdx];
 
@@ -90,19 +115,18 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
 
   useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
-  useEffect(() => { questionTimeLeftRef.current = questionTimeLeft; }, [questionTimeLeft]);
 
   // Countdown phase
   useEffect(() => {
     if (phase !== 'COUNTDOWN') return;
     if (countdown <= 0) {
-      const q = makeQuestion(getPool(), level.choices);
+      const q = nextQuestion(getPool(), level);
       lastTargetRef.current = q.target;
       setQuestion(q);
       setPhase('QUESTION');
       setTimerRunning(true);
       if (level.questionSeconds !== null) setQuestionTimeLeft(level.questionSeconds);
-      setTimeout(() => phoneme.current.play(q.target), 80);
+      if (!level.soundMode) setTimeout(() => phoneme.current.play(q.target), 80);
       return;
     }
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
@@ -144,20 +168,20 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setStreak(0);
     SoundEngine.getInstance().playJam();
     setPhase('FEEDBACK');
-  }, [questionTimeLeft, phase, level.questionSeconds]);
+  }, [questionTimeLeft, phase, level.questionSeconds, paused]);
 
   // Feedback → next question
   useEffect(() => {
     if (phase !== 'FEEDBACK') return;
     const t = setTimeout(() => {
       if (timeLeftRef.current > 0) {
-        const q = makeQuestion(getPool(), level.choices, lastTargetRef.current);
+        const q = nextQuestion(getPool(), level, lastTargetRef.current);
         lastTargetRef.current = q.target;
         setQuestion(q);
         setSelected(null);
         setPhase('QUESTION');
         if (level.questionSeconds !== null) setQuestionTimeLeft(level.questionSeconds);
-        setTimeout(() => phoneme.current.play(q.target), 80);
+        if (!level.soundMode) setTimeout(() => phoneme.current.play(q.target), 80);
       } else {
         setPhase('RESULTS');
       }
@@ -165,10 +189,10 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     return () => clearTimeout(t);
   }, [phase]);
 
-  const handleSelect = (char: string) => {
+  const handleSelect = (choice: string) => {
     if (phase !== 'QUESTION' || !question) return;
-    const isCorrect = char === question.target;
-    setSelected(char);
+    const isCorrect = choice === question.answer;
+    setSelected(choice);
     setTotal(t => t + 1);
     if (isCorrect) {
       const newStreak = streak + 1;
@@ -181,6 +205,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         return next;
       });
       SoundEngine.getInstance().playSuccess();
+      if (level.soundMode) phoneme.current.play(question.target);
     } else {
       setStreak(0);
       SoundEngine.getInstance().playJam();
@@ -211,13 +236,18 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   const handleRestart = () => startLevel(levelIdx);
 
-  const gridCols = level.choices === 4 ? '1fr 1fr'
+  // Grid sizing
+  const soundGridCols = '1fr 1fr 1fr';
+  const listenGridCols = level.choices === 4 ? '1fr 1fr'
     : level.choices === 6 ? '1fr 1fr 1fr'
     : '1fr 1fr 1fr 1fr';
-
-  const btnH = level.choices === 4 ? 130 : level.choices === 6 ? 110 : 90;
-  const btnFont = level.choices === 4 ? 68 : level.choices === 6 ? 56 : 48;
-  const gridW = level.choices === 4 ? 320 : level.choices === 6 ? 440 : 480;
+  const gridCols  = level.soundMode ? soundGridCols : listenGridCols;
+  const gridW     = level.soundMode ? 420 : level.choices === 4 ? 320 : level.choices === 6 ? 440 : 480;
+  const btnH      = level.soundMode ? 70  : level.choices === 4 ? 130 : level.choices === 6 ? 110 : 90;
+  const btnFont   = level.soundMode ? 20  : level.choices === 4 ? 68  : level.choices === 6 ? 56  : 48;
+  const btnFamily = level.soundMode
+    ? '"Courier New", monospace'
+    : '"Inter", "Apple SD Gothic Neo", sans-serif';
 
   // ── Styles ──────────────────────────────────────────────────────────────
 
@@ -238,13 +268,13 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <h1 style={{ color: '#0ff', fontSize: '28px', letterSpacing: '6px', marginBottom: '40px' }}>
           DRILL MODE
         </h1>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '320px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '360px' }}>
           {LEVELS.map((l, i) => (
             <button key={i} onClick={() => startLevel(i)} style={{
               padding: '18px 24px',
-              background: 'rgba(0,255,255,0.05)',
-              border: '2px solid #0ff',
-              color: '#0ff',
+              background: `rgba(${l.accent === '#f0f' ? '255,0,255' : '0,255,255'},0.05)`,
+              border: `2px solid ${l.accent}`,
+              color: l.accent,
               borderRadius: '8px',
               cursor: 'pointer',
               fontFamily: '"Courier New", monospace',
@@ -268,7 +298,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   if (phase === 'COUNTDOWN') {
     return (
       <div style={root}>
-        <div style={{ fontSize: '120px', color: '#0ff', textShadow: '0 0 30px #0ff', lineHeight: 1 }}>
+        <div style={{ fontSize: '120px', color: level.accent, textShadow: `0 0 30px ${level.accent}`, lineHeight: 1 }}>
           {countdown > 0 ? countdown : '▶'}
         </div>
       </div>
@@ -283,7 +313,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <div style={{ color: '#444', fontSize: '13px', letterSpacing: '3px', marginBottom: '8px' }}>
           {level.label}
         </div>
-        <h1 style={{ color: '#0ff', fontSize: '36px', letterSpacing: '4px', marginBottom: '10px' }}>
+        <h1 style={{ color: level.accent, fontSize: '36px', letterSpacing: '4px', marginBottom: '10px' }}>
           SESSION OVER
         </h1>
         <p style={{ fontSize: '72px', color: '#fbbf24', margin: '10px 0', textShadow: '0 0 20px #fbbf24' }}>
@@ -293,8 +323,8 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           {correct} / {total} &nbsp;·&nbsp; {accuracy}%
         </p>
         <div style={{ marginTop: '48px', display: 'flex', gap: '20px' }}>
-          <button onClick={handleRestart} style={btnStyle('#0ff')}>AGAIN</button>
-          <button onClick={() => setPhase('LEVEL_SELECT')} style={btnStyle('#f0f')}>LEVELS</button>
+          <button onClick={handleRestart} style={btnStyle(level.accent)}>AGAIN</button>
+          <button onClick={() => setPhase('LEVEL_SELECT')} style={btnStyle('#888')}>LEVELS</button>
           <button onClick={onBack} style={btnStyle('#666')}>BACK</button>
         </div>
       </div>
@@ -311,7 +341,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         display: 'flex', justifyContent: 'space-between',
         alignItems: 'center', padding: '0 30px',
       }}>
-        <span style={{ color: '#0ff', fontSize: '22px' }}>{score}</span>
+        <span style={{ color: level.accent, fontSize: '22px' }}>{score}</span>
         <span style={{
           color: timeLeft <= 10 ? '#f00' : '#fbbf24',
           fontSize: '32px', fontWeight: 'bold',
@@ -331,7 +361,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       )}
 
-      {/* Per-question countdown bar (levels 2 & 3) */}
+      {/* Per-question countdown bar */}
       {level.questionSeconds !== null && questionTimeLeft !== null && (
         <div style={{ width: `${gridW}px`, marginBottom: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -355,23 +385,43 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       )}
 
-      {/* Replay button */}
-      <button onClick={handleReplay} style={{
-        marginBottom: '36px',
-        padding: '14px 52px',
-        fontSize: '22px',
-        background: 'rgba(0,255,255,0.08)',
-        border: '2px solid #0ff',
-        color: '#0ff',
-        borderRadius: '8px',
-        cursor: 'pointer',
-        fontFamily: '"Courier New", monospace',
-        letterSpacing: '3px',
-        boxShadow: '0 0 10px rgba(0,255,255,0.3)',
-      }}>
-        ▶ PLAY
-      </button>
+      {/* Sound mode: large character display + play hint */}
+      {level.soundMode ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '32px' }}>
+          <div style={{
+            fontSize: '140px', lineHeight: 1,
+            fontFamily: '"Inter", "Apple SD Gothic Neo", sans-serif',
+            color: '#fff',
+            textShadow: phase === 'FEEDBACK'
+              ? (selected === question?.answer ? '0 0 30px #4ade80' : '0 0 30px #f00')
+              : '0 0 20px rgba(255,255,255,0.2)',
+            marginBottom: '16px',
+          }}>
+            {question?.target}
+          </div>
+          <button onClick={handleReplay} style={{
+            padding: '8px 28px', fontSize: '14px',
+            background: 'transparent', border: '1px solid #333',
+            color: '#555', borderRadius: '6px', cursor: 'pointer',
+            fontFamily: '"Courier New", monospace', letterSpacing: '2px',
+          }}>
+            ▶ HINT
+          </button>
+        </div>
+      ) : (
+        /* Listen mode: play button */
+        <button onClick={handleReplay} style={{
+          marginBottom: '36px', padding: '14px 52px', fontSize: '22px',
+          background: 'rgba(0,255,255,0.08)', border: '2px solid #0ff',
+          color: '#0ff', borderRadius: '8px', cursor: 'pointer',
+          fontFamily: '"Courier New", monospace', letterSpacing: '3px',
+          boxShadow: '0 0 10px rgba(0,255,255,0.3)',
+        }}>
+          ▶ PLAY
+        </button>
+      )}
 
+      {/* Pause overlay */}
       {paused && (
         <div style={{
           position: 'absolute', inset: 0,
@@ -380,29 +430,24 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
           alignItems: 'center', justifyContent: 'center',
           zIndex: 10,
         }}>
-          <div style={{ fontSize: '48px', color: '#0ff', letterSpacing: '8px', textShadow: '0 0 20px #0ff' }}>PAUSED</div>
+          <div style={{ fontSize: '48px', color: level.accent, letterSpacing: '8px', textShadow: `0 0 20px ${level.accent}` }}>PAUSED</div>
           <div style={{ fontSize: '13px', color: '#555', marginTop: '16px', letterSpacing: '2px' }}>P TO RESUME · ESC FOR MENU · Q TO QUIT</div>
         </div>
       )}
 
       {/* Choice grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: gridCols,
-        gap: '16px',
-        width: `${gridW}px`,
-      }}>
-        {question?.choices.map(char => {
+      <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: '16px', width: `${gridW}px` }}>
+        {question?.choices.map(choice => {
           let border = '2px solid #222';
           let bg = 'rgba(255,255,255,0.03)';
           let color = '#fff';
 
           if (phase === 'FEEDBACK') {
-            if (char === question.target) {
+            if (choice === question.answer) {
               border = '2px solid #4ade80';
               bg = 'rgba(74,222,128,0.12)';
               color = '#4ade80';
-            } else if (char === selected) {
+            } else if (choice === selected) {
               border = '2px solid #f00';
               bg = 'rgba(255,0,0,0.12)';
               color = '#f00';
@@ -411,24 +456,21 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
           return (
             <button
-              key={char}
-              onClick={() => handleSelect(char)}
+              key={choice}
+              onClick={() => handleSelect(choice)}
               style={{
                 height: `${btnH}px`,
                 fontSize: `${btnFont}px`,
-                background: bg,
-                border,
-                color,
+                background: bg, border, color,
                 borderRadius: '10px',
                 cursor: phase === 'QUESTION' ? 'pointer' : 'default',
-                fontFamily: '"Inter", "Apple SD Gothic Neo", sans-serif',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                fontFamily: btnFamily,
+                letterSpacing: level.soundMode ? '1px' : 'normal',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 transition: 'border-color 0.08s, background 0.08s, color 0.08s',
               }}
             >
-              {char}
+              {choice}
             </button>
           );
         })}
