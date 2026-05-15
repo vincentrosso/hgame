@@ -80,11 +80,16 @@ const GameContainer: React.FC<{ onDrill: () => void }> = ({ onDrill }) => {
         else handleRestart();
       }
       
-      // Pause toggle
-      if ((state === GameState.PLAYING || state === GameState.PAUSED || state === GameState.BRIEFING) && 
-          (e.code === 'KeyP' || e.code === 'Escape')) {
+      // P → pause toggle
+      if (e.code === 'KeyP' && (state === GameState.PLAYING || state === GameState.PAUSED || state === GameState.BRIEFING)) {
         e.preventDefault();
         handleTogglePause();
+      }
+
+      // Q or Esc → go to landing from any active state
+      if ((e.key === 'q' || e.key === 'Q' || e.key === 'Escape') && state !== GameState.START) {
+        e.preventDefault();
+        handleGoToStart();
       }
 
       if (e.code === 'KeyL' && state === GameState.PLAYING) {
@@ -298,6 +303,20 @@ const GameContainer: React.FC<{ onDrill: () => void }> = ({ onDrill }) => {
     });
   };
 
+  const handleGoToStart = () => {
+    setScore(0);
+    setWave(1);
+    setLives(3);
+    setCombo(0);
+    setIsFever(false);
+    if (waveManagerRef.current) {
+      waveManagerRef.current.currentWave = 1;
+      waveManagerRef.current.spawnWave(dimensions.width);
+    }
+    playerRef.current = new Player(dimensions.width, dimensions.height);
+    setState(GameState.START);
+  };
+
   const handleStart = () => {
     setState(GameState.BRIEFING);
   };
@@ -366,8 +385,15 @@ const GameContainer: React.FC<{ onDrill: () => void }> = ({ onDrill }) => {
         </div>
       )}
 
+      {state === GameState.PAUSED && (
+        <div style={overlayStyle}>
+          <h1 style={{ color: '#0ff', fontSize: '48px', letterSpacing: '8px', textShadow: '0 0 20px #0ff' }}>PAUSED</h1>
+          <p style={{ ...pStyle, fontSize: '14px', color: '#666', marginTop: '-10px' }}>P TO RESUME · Q/ESC TO QUIT</p>
+        </div>
+      )}
+
       {state === GameState.PLAYING && (
-        <button 
+        <button
           onClick={handleListenAgain}
           style={{
             position: 'absolute',

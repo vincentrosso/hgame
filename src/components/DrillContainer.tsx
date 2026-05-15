@@ -53,6 +53,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [timerRunning, setTimerRunning] = useState(false);
   const [questionTimeLeft, setQuestionTimeLeft] = useState<number | null>(null);
+  const [paused, setPaused] = useState(false);
 
   const phoneme = useRef(new PhonemePlayer());
   const lastTargetRef = useRef<string | undefined>(undefined);
@@ -65,7 +66,17 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'q' || e.key === 'Q') { onBack(); return; }
-      if (e.key === 'Escape') { setPhase('LEVEL_SELECT'); }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setTimerRunning(false);
+        setQuestionTimeLeft(null);
+        setPaused(false);
+        setPhase('LEVEL_SELECT');
+        return;
+      }
+      if (e.key === 'p' || e.key === 'P') {
+        setPaused(p => !p);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -100,10 +111,10 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   // Session timer
   useEffect(() => {
-    if (!timerRunning) return;
+    if (!timerRunning || paused) return;
     const t = setInterval(() => setTimeLeft(s => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
-  }, [timerRunning]);
+  }, [timerRunning, paused]);
 
   // Session time's up
   useEffect(() => {
@@ -115,7 +126,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   // Per-question timer (levels 2 & 3)
   useEffect(() => {
-    if (phase !== 'QUESTION' || level.questionSeconds === null) return;
+    if (phase !== 'QUESTION' || level.questionSeconds === null || paused) return;
     const t = setInterval(() => {
       setQuestionTimeLeft(s => {
         if (s === null || s <= 1) return 0;
@@ -123,11 +134,11 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       });
     }, 1000);
     return () => clearInterval(t);
-  }, [phase, level.questionSeconds]);
+  }, [phase, level.questionSeconds, paused]);
 
   // Per-question expiry → auto-wrong
   useEffect(() => {
-    if (phase !== 'QUESTION' || questionTimeLeft !== 0 || level.questionSeconds === null) return;
+    if (phase !== 'QUESTION' || questionTimeLeft !== 0 || level.questionSeconds === null || paused) return;
     setSelected(null);
     setTotal(t => t + 1);
     setStreak(0);
@@ -195,6 +206,7 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
     setTimeLeft(LEVELS[idx].sessionSeconds);
     setQuestionTimeLeft(null);
     setTimerRunning(false);
+    setPaused(false);
   };
 
   const handleRestart = () => startLevel(levelIdx);
@@ -319,15 +331,27 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         </div>
       )}
 
-      {/* Per-question timer (levels 2 & 3) */}
+      {/* Per-question countdown bar (levels 2 & 3) */}
       {level.questionSeconds !== null && questionTimeLeft !== null && (
-        <div style={{
-          position: 'absolute', top: 62, right: 30,
-          color: questionTimeLeft <= 2 ? '#f00' : '#888',
-          fontSize: '16px', letterSpacing: '1px',
-          textShadow: questionTimeLeft <= 2 ? '0 0 8px #f00' : 'none',
-        }}>
-          {questionTimeLeft}s
+        <div style={{ width: `${gridW}px`, marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <span style={{ fontSize: '13px', color: '#555', letterSpacing: '2px' }}>TIME</span>
+            <span style={{
+              fontSize: '18px', fontWeight: 'bold', letterSpacing: '1px',
+              color: questionTimeLeft <= 2 ? '#f00' : '#fbbf24',
+              textShadow: questionTimeLeft <= 2 ? '0 0 10px #f00' : 'none',
+            }}>{questionTimeLeft}s</span>
+          </div>
+          <div style={{ height: '6px', background: '#111', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{
+              height: '100%',
+              width: `${(questionTimeLeft / level.questionSeconds) * 100}%`,
+              background: questionTimeLeft <= 2 ? '#f00' : '#fbbf24',
+              borderRadius: '3px',
+              transition: 'width 0.9s linear, background 0.2s',
+              boxShadow: questionTimeLeft <= 2 ? '0 0 8px #f00' : 'none',
+            }} />
+          </div>
         </div>
       )}
 
@@ -347,6 +371,19 @@ const DrillContainer: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       }}>
         ▶ PLAY
       </button>
+
+      {paused && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'rgba(0,0,0,0.75)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          zIndex: 10,
+        }}>
+          <div style={{ fontSize: '48px', color: '#0ff', letterSpacing: '8px', textShadow: '0 0 20px #0ff' }}>PAUSED</div>
+          <div style={{ fontSize: '13px', color: '#555', marginTop: '16px', letterSpacing: '2px' }}>P TO RESUME · ESC FOR MENU · Q TO QUIT</div>
+        </div>
+      )}
 
       {/* Choice grid */}
       <div style={{
