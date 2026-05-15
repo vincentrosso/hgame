@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PhonemePlayer } from '../engine/PhonemePlayer';
 import { SoundEngine } from '../engine/SoundEngine';
-import { CONSONANTS, VOWELS, CHAR_LABELS } from '../engine/koreanChars';
+import { CONSONANTS, VOWELS, CHAR_LABELS, ALL_LABELS } from '../engine/koreanChars';
 
 type DrillPhase = 'LEVEL_SELECT' | 'COUNTDOWN' | 'QUESTION' | 'FEEDBACK' | 'RESULTS';
 
@@ -31,7 +31,6 @@ const LEVELS: LevelConfig[] = [
 const FEEDBACK_MS = 700;
 const POOL_EXPAND_AT = 10;
 
-const ALL_LABELS = Object.values(CHAR_LABELS);
 
 function makeListenQuestion(pool: string[], numChoices: number, exclude?: string): Question {
   const candidates = exclude ? pool.filter(c => c !== exclude) : pool;

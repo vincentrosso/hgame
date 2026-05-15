@@ -350,7 +350,7 @@ const GameContainer: React.FC<{ onDrill: () => void }> = ({ onDrill }) => {
       {state === GameState.START && (
         <div style={overlayStyle}>
           <h1 style={titleStyle}>GAELLAREUGEU</h1>
-          <p style={{ ...pStyle, fontSize: '14px', color: '#0ff', opacity: 0.8, marginTop: '-20px', marginBottom: '30px' }}>v0.1.6</p>
+          <p style={{ ...pStyle, fontSize: '14px', color: '#0ff', opacity: 0.8, marginTop: '-20px', marginBottom: '30px' }}>v0.1.7</p>
           <p style={pStyle}>Listen to the sound. Shoot the matching character.</p>
           <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
             <button onClick={handleStart} style={buttonStyle}>SHOOT</button>
